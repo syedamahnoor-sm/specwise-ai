@@ -1,49 +1,99 @@
 # SpecWise
 
-### AI-Powered Software Requirements Engineering Platform
+**AI-Powered Software Requirements Engineering Platform**
 
-SpecWise is a full-stack AI application designed to transform initial software ideas into structured, developer-ready requirements through intelligent, interactive conversations.
+SpecWise is a web-based platform designed to simplify and improve the Software Requirements Engineering process through AI-assisted requirement gathering, analysis, refinement, and documentation.
 
-## Project Vision
+## Project Overview
 
-Software projects often begin with vague or incomplete requirements. SpecWise aims to bridge the gap between a client's idea and the technical specifications developers need to begin implementation.
+Traditional requirements engineering often involves unclear requirements, incomplete information, and time-consuming documentation. SpecWise aims to address these challenges through an interactive, AI-assisted workflow.
+
+The platform will allow users to describe their software ideas, refine requirements through AI-generated clarification questions, and produce structured Software Requirements Specification (SRS) documents.
 
 ## Planned Features
 
-- AI-powered requirements gathering chatbot
-- Intelligent follow-up questions and ambiguity detection
-- Persistent project and conversation history
-- Functional and non-functional requirements extraction
-- Contradiction detection and requirement validation
-- Structured JSON specification generation
-- Software Requirements Specification (SRS) generation
-- User stories and acceptance criteria
-- Client review and approval workflow
-- Developer-ready project handoff
+- Project creation and management
+- AI-assisted requirements elicitation
+- Interactive clarification questions
+- Functional and non-functional requirements identification
+- Requirements prioritization and refinement
+- SRS document generation
+- Specification version management
+- Requirements review and approval
 
-## Planned Technology Stack
+## Technology Stack
 
-| Layer | Technology |
+| Component | Technology |
 |---|---|
-| Frontend | React, TypeScript, Tailwind CSS |
-| Backend orchestration | n8n |
-| AI | Gemini or Anthropic |
-| Database | PostgreSQL |
-| API communication | REST APIs and Webhooks |
-| Development assistance | Claude Code |
+| Frontend | React, TypeScript |
+| Backend Automation | n8n |
+| Database | PostgreSQL 17 |
+| AI Integration | LLM APIs (planned) |
+| Containerization | Docker |
+| Version Control | Git and GitHub |
 
-## Architecture
+## Project Structure
 
-Frontend → n8n Webhook APIs → AI Processing & Business Logic → PostgreSQL
+```text
+specwise-ai/
+├── workflows/
+│   └── 01-project-intake-api.json
+├── database/
+│   └── schema.sql
+├── docs/
+│   └── api-documentation.md
+└── README.md
+```
 
-## Project Status
+## Development Progress
 
-**Planning and architecture phase.**
+### Workflow 1 — Project Intake API
 
-This project is being developed as part of hands-on Agentic AI learning, focusing on webhook automation, conversational AI, structured outputs, and full-stack integration.
+**Status: Implemented and locally tested**
 
-**Note:** SpecWise does not use Retrieval-Augmented Generation (RAG). Its primary focus is interactive requirements elicitation and structured project-state management.
+- Accepts project information through a REST webhook
+- Validates project titles and initial ideas
+- Uses header-based API-key authentication
+- Saves valid projects in PostgreSQL
+- Returns structured JSON responses
+- Handles validation errors and database failures
+
+### Upcoming Development
+
+- AI requirements interviewer
+- Requirements extraction and classification
+- Clarification and refinement workflows
+- SRS generation and versioning
+- Review and approval functionality
+- Frontend integration and user authentication
+
+## API Endpoint
+
+`POST /webhook/specwise/projects`
+
+Request example:
+
+```json
+{
+  "title": "Smart Attendance System",
+  "initial_idea": "A university attendance management platform."
+}
+```
+
+Authentication requires an `x-api-key` header, configured securely in n8n.
+
+The API is currently tested in a local Docker environment. Public deployment and end-user authentication are not yet implemented.
+
+## Current Status
+
+SpecWise is under active development. The initial project intake workflow has been implemented and tested, while the remaining features are planned for subsequent development.
+
+## Security
+
+API credentials and database passwords are not included in this repository. Imported n8n workflows require their own credentials to be configured.
+
+The API key is intended for trusted backend-to-backend communication and must not be embedded in public frontend code.
 
 ## License
 
-MIT
+MIT License.

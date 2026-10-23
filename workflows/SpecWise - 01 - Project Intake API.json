@@ -1,0 +1,225 @@
+{
+  "name": "SpecWise - 01 - Project Intake API",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "specwise/projects",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "d67946e8-4c14-442d-9c3c-ca6885238f9e",
+      "name": "Webhook",
+      "webhookId": "399edb27-e438-4744-b8c8-daaa41f9b449",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "o0S8KYoNjcWSOHg2",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO projects (title, initial_idea, status)\nVALUES ($1, $2, 'draft')\nRETURNING id, title, initial_idea, status, created_at;",
+        "options": {
+          "queryReplacement": "={{ [$json.title, $json.initial_idea] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        672,
+        -16
+      ],
+      "id": "aebd0569-2b35-4c95-b0d9-ff54229155ae",
+      "name": "Execute a SQL query",
+      "credentials": {
+        "postgres": {
+          "id": "2ZjsdLaIJUCvjvem",
+          "name": "Postgres account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "9cbc8761-4a9c-4b78-ada6-1fe8444a861e",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        448,
+        0
+      ],
+      "id": "fab392b0-2afc-4965-8ec0-e1c13d24e657",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({\n  success: false,\n  message: \"Invalid project information.\",\n  errors: $json.errors\n}) }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        592,
+        304
+      ],
+      "id": "e0025cc3-18da-49b9-9f44-45b7cfb1138c",
+      "name": "Invalid Input Response"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {\n  success: true,\n  message: \"Project created successfully\",\n  project: $json\n} }}",
+        "options": {
+          "responseCode": 201
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        896,
+        -16
+      ],
+      "id": "00fe94e5-332f-4f30-80a1-1fc6d010838b",
+      "name": "Success Response"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst items = $input.all();\n\nreturn items.map(item => {\n  const body = item.json.body;\n\n  const errors = [];\n\n  if (!body || typeof body !== 'object' || Array.isArray(body)) {\n    errors.push('Request body must be a JSON object.');\n  }\n\n  const title = typeof body?.title === 'string'\n    ? body.title.trim()\n    : '';\n\n  const initialIdea = typeof body?.initial_idea === 'string'\n    ? body.initial_idea.trim()\n    : '';\n\n  if (!title) {\n    errors.push('Project title is required and must be a string.');\n  } else if (title.length > 255) {\n    errors.push('Project title cannot exceed 255 characters.');\n  }\n\n  if (!initialIdea) {\n    errors.push('Initial idea is required and must be a string.');\n  } else if (initialIdea.length > 10000) {\n    errors.push('Initial idea cannot exceed 10000 characters.');\n  }\n\n  return {\n    json: {\n      valid: errors.length === 0,\n      errors,\n      title,\n      initial_idea: initialIdea\n    }\n  };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ],
+      "id": "a8d6d394-c4ad-4550-ab8f-e3641f257452",
+      "name": "Validate Project Input"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({\n  success: false,\n  message: \"Database service is temporarily unavailable. Please try again later.\"\n}) }}",
+        "options": {
+          "responseCode": 503
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        912,
+        208
+      ],
+      "id": "3fd0d6d9-3c4d-4333-b7af-fa785db45b33",
+      "name": "Database Error Response"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate Project Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Invalid Input Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query": {
+      "main": [
+        [
+          {
+            "node": "Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Database Error Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Project Input": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "86dc66d2-caf0-4adf-aa20-73e4215bfb64",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "02558d88dcee125b348c380448781b5f7fcca2bcea33065de0bb08cd749fdd0d"
+  },
+  "nodeGroups": [],
+  "id": "Yv1amFagE2vNpJ44",
+  "tags": []
+}
