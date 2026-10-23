@@ -1,0 +1,584 @@
+{
+  "name": "SpecWise - 02 - AI Requirements Interviewer",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "specwise/projects/interview",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "602eda12-2315-40e4-9882-4a8dfa9b096d",
+      "name": "Webhook",
+      "webhookId": "6f3e9ecd-8fed-4db2-b423-049eabe16045",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "o0S8KYoNjcWSOHg2",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nreturn items.map(item => {\n  const body = item.json.body;\n  const errors = [];\n\n  if (!body || typeof body !== 'object' || Array.isArray(body)) {\n    errors.push('Request body must be a JSON object.');\n  }\n\n  const projectId =\n    typeof body?.project_id === 'string'\n      ? body.project_id.trim()\n      : '';\n\n  const uuidRegex =\n    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;\n\n  if (!projectId) {\n    errors.push('Project ID is required.');\n  } else if (!uuidRegex.test(projectId)) {\n    errors.push('Project ID must be a valid UUID.');\n  }\n\n  return {\n    json: {\n      valid: errors.length === 0,\n      errors,\n      project_id: projectId\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ],
+      "id": "4d453ac7-10b1-44e2-982f-63104b8c1a74",
+      "name": "Validate Project ID"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "84da131b-798b-4308-a896-7a8604f653a1",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        448,
+        0
+      ],
+      "id": "5e0f8714-4579-4320-a9e6-620f96b03f8b",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({\n  success: false,\n  message: \"Invalid project information.\",\n  errors: $json.errors\n}) }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        672,
+        144
+      ],
+      "id": "05ee497f-addf-46f6-bde3-89faba67f1e9",
+      "name": "Invalid Project ID Response"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n    id,\n    title,\n    initial_idea,\n    description,\n    status,\n    created_at\nFROM projects\nWHERE id = $1::uuid;",
+        "options": {
+          "queryReplacement": "={{ [$json.project_id] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        672,
+        -96
+      ],
+      "id": "bf22abbb-2918-4b19-9976-cef0bdcb90ef",
+      "name": "Get Project Details",
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "2ZjsdLaIJUCvjvem",
+          "name": "Postgres account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "2cdc57e1-03f5-48ba-afd2-26627f05ce10",
+              "leftValue": "={{ $json.id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        896,
+        -192
+      ],
+      "id": "b6804998-1667-4712-b4e7-da6cdb8a0092",
+      "name": "Project Exists?"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({\n  success: false,\n  message: \"Project not found.\"\n}) }}",
+        "options": {
+          "responseCode": 404
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1200,
+        -48
+      ],
+      "id": "163cc081-d75e-4af1-84a5-9c1dbcd79c1e",
+      "name": "Project Not Found Response"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({\n  success: false,\n  message: \"Database service is temporarily unavailable. Please try again later.\"\n}) }}",
+        "options": {
+          "responseCode": 503
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        896,
+        32
+      ],
+      "id": "6e10ea45-b9e7-4f03-9a8c-d23efe000765",
+      "name": "Database Error Response"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-3.5-flash-lite",
+          "mode": "list",
+          "cachedResultName": "Gemini 3.5 Flash Lite"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "={{ \n`You are SpecWise, an expert Software Requirements Engineer.\n\nAnalyze the software project below and identify missing, unclear, or ambiguous requirements.\n\nGenerate 5 to 7 specific clarification questions.\n\nRules:\n- Cover relevant functional and non-functional requirements.\n- Consider stakeholders, security, usability, performance, and constraints.\n- Prioritize questions that significantly affect system design.\n- Do not repeat information already provided.\n- Do not invent confirmed requirements.\n- Use clear language understandable to non-technical users.\n- Return ONLY valid JSON.\n\nRequired JSON structure:\n{\n  \"questions\": [\n    {\n      \"question\": \"A specific clarification question\",\n      \"category\": \"functional\",\n      \"priority\": \"high\"\n    }\n  ]\n}\n\nAllowed categories: functional, non_functional, security, usability, performance, stakeholder, constraint.\nAllowed priorities: high, medium, low.\n\nProject Title: ${$json.title}\nInitial Idea: ${$json.initial_idea}\nDescription: ${$json.description || \"Not provided\"}`\n}}"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        1696,
+        -224
+      ],
+      "id": "ac74bb42-562c-4f3d-986c-70d163c40bdf",
+      "name": "Message a model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "T8QI3sRRTLNeKlnF",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\n\nconst text = response.content?.parts\n  ?.map(part => part.text || '')\n  .join('');\n\nif (!text) {\n  throw new Error('Gemini returned an empty response.');\n}\n\nlet parsed;\n\ntry {\n  parsed = JSON.parse(text);\n} catch {\n  throw new Error('Gemini returned invalid JSON.');\n}\n\nif (!Array.isArray(parsed.questions)) {\n  throw new Error('Gemini response must contain a questions array.');\n}\n\nconst allowedCategories = [\n  'functional',\n  'non_functional',\n  'security',\n  'usability',\n  'performance',\n  'stakeholder',\n  'constraint'\n];\n\nconst allowedPriorities = ['high', 'medium', 'low'];\n\nif (parsed.questions.length < 5 || parsed.questions.length > 7) {\n  throw new Error('Gemini must generate between 5 and 7 questions.');\n}\n\nconst questions = parsed.questions.map((item, index) => {\n  if (\n    typeof item.question !== 'string' ||\n    !item.question.trim() ||\n    !allowedCategories.includes(item.category) ||\n    !allowedPriorities.includes(item.priority)\n  ) {\n    throw new Error(`Invalid question structure at index ${index}.`);\n  }\n\n  return {\n    question: item.question.trim(),\n    category: item.category,\n    priority: item.priority\n  };\n});\n\nreturn [\n  {\n    json: {\n      project_id: $('Get Project Details').first().json.id,\n      questions,\n      question_count: questions.length\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2112,
+        -304
+      ],
+      "id": "375aa296-9f50-4855-b948-05e412f5fcaa",
+      "name": "Validate AI Questions"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH inserted AS (\n    INSERT INTO clarification_questions\n        (project_id, question, category, priority, status)\n    SELECT\n        $1::uuid,\n        q.question,\n        q.category,\n        q.priority,\n        'pending'\n    FROM jsonb_to_recordset($2::jsonb)\n        AS q(question TEXT, category TEXT, priority TEXT)\n    WHERE NOT EXISTS (\n        SELECT 1\n        FROM clarification_questions existing\n        WHERE existing.project_id = $1::uuid\n          AND existing.question = q.question\n    )\n    RETURNING id, project_id, question, category,\n              priority, status, created_at\n)\nSELECT * FROM inserted;",
+        "options": {
+          "queryReplacement": "={{ [$json.project_id, JSON.stringify($json.questions)] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        2400,
+        -304
+      ],
+      "id": "b1bc9749-eed3-465a-82fe-3f1b3036cd0e",
+      "name": "Save Clarification Questions",
+      "credentials": {
+        "postgres": {
+          "id": "2ZjsdLaIJUCvjvem",
+          "name": "Postgres account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({\n  success: false,\n  message: \"Unable to save clarification questions. Please try again later.\"\n}) }}",
+        "options": {
+          "responseCode": 503
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        2656,
+        -176
+      ],
+      "id": "8fba2606-8846-4ff2-a077-73ddad50f184",
+      "name": "Question Save Error Response"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({\n  success: true,\n  message: \"Clarification questions generated successfully.\",\n  project_id: $input.first().json.project_id,\n  question_count: $input.all().length,\n  questions: $input.all().map(item => ({\n    id: item.json.id,\n    question: item.json.question,\n    category: item.json.category,\n    priority: item.json.priority,\n    status: item.json.status\n  }))\n}) }}",
+        "options": {
+          "responseCode": 201
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        2656,
+        -432
+      ],
+      "id": "5455cc9a-c1fb-4aad-8b13-e98a7530e0d1",
+      "name": "Interview Success Response"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT COUNT(*)::integer AS question_count\nFROM clarification_questions\nWHERE project_id = $1::uuid\n  AND status = 'pending';",
+        "options": {
+          "queryReplacement": "={{ [$('Get Project Details').first().json.id] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        1216,
+        -320
+      ],
+      "id": "e6f1433c-2b85-4d65-b481-0d0cd591a3e8",
+      "name": "Check Existing Questions",
+      "credentials": {
+        "postgres": {
+          "id": "2ZjsdLaIJUCvjvem",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "c03d8203-4e18-430f-9517-3784b5c64fd7",
+              "leftValue": "={{ $json.question_count }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        1440,
+        -320
+      ],
+      "id": "e0353a8a-12db-4dd2-8219-c664f0d869dd",
+      "name": "Questions Already Exist?"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n    id,\n    project_id,\n    question,\n    category,\n    priority,\n    status,\n    created_at\nFROM clarification_questions\nWHERE project_id = $1::uuid\n  AND status = 'pending'\nORDER BY created_at ASC, id ASC;",
+        "options": {
+          "queryReplacement": "={{ [$('Get Project Details').first().json.id] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        1696,
+        -448
+      ],
+      "id": "5df14677-1a75-4fcf-ac6e-a86bd24dccad",
+      "name": "Get Existing Questions",
+      "credentials": {
+        "postgres": {
+          "id": "2ZjsdLaIJUCvjvem",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({\n  success: true,\n  message: \"Existing clarification questions retrieved successfully.\",\n  project_id: $('Get Project Details').first().json.id,\n  question_count: $input.all().length,\n  questions: $input.all().map(item => ({\n    id: item.json.id,\n    question: item.json.question,\n    category: item.json.category,\n    priority: item.json.priority,\n    status: item.json.status\n  }))\n}) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1920,
+        -448
+      ],
+      "id": "7db5064f-1f79-4024-93b4-f33ac1f07269",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({\n  success: false,\n  error: \"AI_SERVICE_UNAVAILABLE\",\n  message: \"Unable to generate clarification questions right now. Please try again later.\",\n  project_id: $('Get Project Details').first().json.id\n}) }}",
+        "options": {
+          "responseCode": 503
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        2096,
+        -112
+      ],
+      "id": "21b6aa32-6886-4af7-9918-8121b5a9e4df",
+      "name": "Gemini Error Response"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate Project ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Project ID": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Get Project Details",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Invalid Project ID Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Project Details": {
+      "main": [
+        [
+          {
+            "node": "Project Exists?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Database Error Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Project Exists?": {
+      "main": [
+        [
+          {
+            "node": "Check Existing Questions",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Project Not Found Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Validate AI Questions",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Gemini Error Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate AI Questions": {
+      "main": [
+        [
+          {
+            "node": "Save Clarification Questions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Clarification Questions": {
+      "main": [
+        [
+          {
+            "node": "Interview Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Question Save Error Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Existing Questions": {
+      "main": [
+        [
+          {
+            "node": "Questions Already Exist?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Questions Already Exist?": {
+      "main": [
+        [
+          {
+            "node": "Get Existing Questions",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Existing Questions": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "dced47e3-8a13-48d9-95a8-8a3f334ba0ed",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "02558d88dcee125b348c380448781b5f7fcca2bcea33065de0bb08cd749fdd0d"
+  },
+  "nodeGroups": [],
+  "id": "F8JJbSbBWKwk4ltu",
+  "tags": []
+}

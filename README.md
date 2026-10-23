@@ -21,6 +21,72 @@ The platform will allow users to describe their software ideas, refine requireme
 - Specification version management
 - Requirements review and approval
 
+## Implemented Workflows
+
+### Workflow 1 — Project Intake API
+
+Provides an authenticated REST API for creating software projects.
+
+**Features:**
+- API key authentication
+- Input validation
+- PostgreSQL project storage
+- Structured success and error responses
+
+**Endpoint:** `POST /webhook/specwise/projects`
+
+**File:** `workflows/01-project-intake-api.json`
+
+### Workflow 2 — AI Requirements Interviewer
+
+Uses Google Gemini Flash-Lite to identify missing or ambiguous software requirements and generate clarification questions.
+
+**Features:**
+- Project UUID validation
+- PostgreSQL project lookup
+- AI-generated clarification questions
+- Question categorization and prioritization
+- JSON response validation
+- PostgreSQL question storage
+- Existing-question retrieval
+- Duplicate prevention for sequential requests
+- Gemini service failure handling
+
+**Endpoint:** `POST /webhook/specwise/projects/interview`
+
+**File:** `workflows/02-ai-requirements-interviewer.json`
+
+### Technology Stack
+
+| Component | Technology |
+|---|---|
+| Workflow automation | n8n |
+| Database | PostgreSQL 17 |
+| AI model | Google Gemini 3.5 Flash-Lite |
+| Containerization | Docker |
+| API | REST / JSON |
+
+### Local Setup
+
+1. Start the PostgreSQL and n8n Docker containers.
+2. Initialize the database using `database/schema.sql`.
+3. Import the workflow JSON files into n8n.
+4. Configure PostgreSQL credentials.
+5. Configure Google Gemini API credentials.
+6. Configure webhook Header Auth credentials.
+7. Publish both workflows.
+8. Test the API endpoints using an HTTP client.
+
+**Security:** Never commit API keys, database passwords, or other credentials to the repository.
+
+### Current Development Status
+
+- Workflow 1: Completed and tested.
+- Workflow 2: Core functionality implemented and tested.
+- Next: User responses to clarification questions and iterative requirements gathering.
+
+See `docs/api-documentation.md` for endpoint details and response examples.
+
 ## Technology Stack
 
 | Component | Technology |

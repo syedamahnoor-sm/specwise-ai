@@ -1,5 +1,9 @@
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
+-- ==========================================
+-- 1. Projects
+-- ==========================================
+
 CREATE TABLE IF NOT EXISTS projects (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     title VARCHAR(255) NOT NULL,
@@ -10,6 +14,10 @@ CREATE TABLE IF NOT EXISTS projects (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- ==========================================
+-- 2. Conversations
+-- ==========================================
+
 CREATE TABLE IF NOT EXISTS conversations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id UUID NOT NULL REFERENCES projects(id),
@@ -17,6 +25,10 @@ CREATE TABLE IF NOT EXISTS conversations (
     content TEXT NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- ==========================================
+-- 3. Requirements
+-- ==========================================
 
 CREATE TABLE IF NOT EXISTS requirements (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -31,16 +43,26 @@ CREATE TABLE IF NOT EXISTS requirements (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- ==========================================
+-- 4. Clarification Questions
+-- ==========================================
+
 CREATE TABLE IF NOT EXISTS clarification_questions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id UUID NOT NULL REFERENCES projects(id),
     requirement_id UUID REFERENCES requirements(id),
     question TEXT NOT NULL,
     answer TEXT,
+    category VARCHAR(30),
+    priority VARCHAR(10),
     status VARCHAR(30),
     created_at TIMESTAMPTZ DEFAULT NOW(),
     answered_at TIMESTAMPTZ
 );
+
+-- ==========================================
+-- 5. Specification Versions
+-- ==========================================
 
 CREATE TABLE IF NOT EXISTS specification_versions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -53,6 +75,10 @@ CREATE TABLE IF NOT EXISTS specification_versions (
     UNIQUE (id, project_id)
 );
 
+-- ==========================================
+-- 6. Approvals
+-- ==========================================
+
 CREATE TABLE IF NOT EXISTS approvals (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id UUID NOT NULL REFERENCES projects(id),
@@ -63,3 +89,13 @@ CREATE TABLE IF NOT EXISTS approvals (
     FOREIGN KEY (specification_id, project_id)
         REFERENCES specification_versions(id, project_id)
 );
+
+-- ==========================================
+-- Migration for existing databases
+-- ==========================================
+
+ALTER TABLE clarification_questions
+    ADD COLUMN IF NOT EXISTS category VARCHAR(30);
+
+ALTER TABLE clarification_questions
+    ADD COLUMN IF NOT EXISTS priority VARCHAR(10);
