@@ -1,9 +1,6 @@
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
--- ==========================================
 -- 1. Projects
--- ==========================================
-
 CREATE TABLE IF NOT EXISTS projects (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     title VARCHAR(255) NOT NULL,
@@ -14,10 +11,7 @@ CREATE TABLE IF NOT EXISTS projects (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- ==========================================
--- 2. Conversations
--- ==========================================
-
+-- 2. Conversations (reserved for conversation history in a future workflow)
 CREATE TABLE IF NOT EXISTS conversations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id UUID NOT NULL REFERENCES projects(id),
@@ -26,10 +20,7 @@ CREATE TABLE IF NOT EXISTS conversations (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- ==========================================
 -- 3. Requirements
--- ==========================================
-
 CREATE TABLE IF NOT EXISTS requirements (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id UUID NOT NULL REFERENCES projects(id),
@@ -43,10 +34,7 @@ CREATE TABLE IF NOT EXISTS requirements (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- ==========================================
--- 4. Clarification Questions
--- ==========================================
-
+-- 4. Clarification questions (Workflows 2 and 3)
 CREATE TABLE IF NOT EXISTS clarification_questions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id UUID NOT NULL REFERENCES projects(id),
@@ -60,10 +48,7 @@ CREATE TABLE IF NOT EXISTS clarification_questions (
     answered_at TIMESTAMPTZ
 );
 
--- ==========================================
--- 5. Specification Versions
--- ==========================================
-
+-- 5. Specification versions
 CREATE TABLE IF NOT EXISTS specification_versions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id UUID NOT NULL REFERENCES projects(id),
@@ -75,10 +60,7 @@ CREATE TABLE IF NOT EXISTS specification_versions (
     UNIQUE (id, project_id)
 );
 
--- ==========================================
 -- 6. Approvals
--- ==========================================
-
 CREATE TABLE IF NOT EXISTS approvals (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     project_id UUID NOT NULL REFERENCES projects(id),
@@ -90,12 +72,10 @@ CREATE TABLE IF NOT EXISTS approvals (
         REFERENCES specification_versions(id, project_id)
 );
 
--- ==========================================
--- Migration for existing databases
--- ==========================================
+-- Safe migrations for existing installations
+ALTER TABLE clarification_questions ADD COLUMN IF NOT EXISTS category VARCHAR(30);
+ALTER TABLE clarification_questions ADD COLUMN IF NOT EXISTS priority VARCHAR(10);
+ALTER TABLE clarification_questions ADD COLUMN IF NOT EXISTS answered_at TIMESTAMPTZ;
 
-ALTER TABLE clarification_questions
-    ADD COLUMN IF NOT EXISTS category VARCHAR(30);
-
-ALTER TABLE clarification_questions
-    ADD COLUMN IF NOT EXISTS priority VARCHAR(10);
+-- Workflow 3 currently sets answer and status='answered'.
+-- answered_at remains NULL until the workflow UPDATE is extended to set it.

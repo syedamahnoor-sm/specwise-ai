@@ -1,0 +1,478 @@
+{
+  "name": "SpecWise - 03 - AI Chatbot Conversation",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "specwise/projects/chat",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "5c939ff2-beae-4bb8-a229-481e1f8b7775",
+      "name": "Webhook",
+      "webhookId": "3bd2be95-d157-4984-955b-23f7812e20f1",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "o0S8KYoNjcWSOHg2",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || {};\n\nconst projectId = body.project_id;\nconst questionId = body.question_id;\nconst answer = body.answer;\n\nconst errors = [];\n\nconst uuidRegex =\n  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;\n\nif (typeof projectId !== 'string' || !uuidRegex.test(projectId)) {\n  errors.push('Valid project_id is required.');\n}\n\nif (typeof questionId !== 'string' || !uuidRegex.test(questionId)) {\n  errors.push('Valid question_id is required.');\n}\n\nif (typeof answer !== 'string' || !answer.trim()) {\n  errors.push('Answer cannot be empty.');\n}\n\nreturn [{\n  json: {\n    valid: errors.length === 0,\n    errors,\n    project_id: projectId,\n    question_id: questionId,\n    answer: typeof answer === 'string' ? answer.trim() : ''\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ],
+      "id": "dca5a645-9fa3-4252-adbf-90bcbaf9c89f",
+      "name": "Validate Chat Input"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "0830974a-8841-4a6d-b375-4d5396c61993",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        432,
+        0
+      ],
+      "id": "10eb80ce-fa55-4f7d-b9d7-81faeb9fcbf2",
+      "name": "Chat Input Valid?"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({\n  success: false,\n  message: \"Invalid chat input.\",\n  errors: $json.errors\n}) }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        656,
+        112
+      ],
+      "id": "afa665f5-d2a4-40ba-8b00-ebbd69244f94",
+      "name": "Invalid Chat Input Response"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n    id,\n    project_id,\n    question,\n    answer,\n    status,\n    category,\n    priority\nFROM clarification_questions\nWHERE id = $1::uuid\n  AND project_id = $2::uuid\n  AND status = 'pending';",
+        "options": {
+          "queryReplacement": "={{ [   $json.question_id,   $json.project_id ] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        656,
+        -96
+      ],
+      "id": "5463e9c7-ed67-4eed-b471-67b9d0714d08",
+      "name": "Verify Clarification Question",
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "2ZjsdLaIJUCvjvem",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "44e8997c-e198-4c7b-83a1-496382cc1eb1",
+              "leftValue": "={{ $json.id || '' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        880,
+        -96
+      ],
+      "id": "3835ba2a-6e13-46cc-ad40-40a8bda4d3e7",
+      "name": "Question Found?"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({\n  success: false,\n  error: \"QUESTION_NOT_FOUND\",\n  message: \"The clarification question was not found or has already been answered.\"\n}) }}",
+        "options": {
+          "responseCode": 404
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1120,
+        16
+      ],
+      "id": "4ce6ea9e-376a-40b5-85e5-be75abeb7d92",
+      "name": "Question Not Found Response"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE clarification_questions\nSET\n    answer = $1,\n    status = 'answered'\nWHERE id = $2::uuid\n  AND project_id = $3::uuid\n  AND status = 'pending'\nRETURNING id, project_id, question, answer, status;",
+        "options": {
+          "queryReplacement": "={{ [   $('Validate Chat Input').first().json.answer,   $('Validate Chat Input').first().json.question_id,   $('Validate Chat Input').first().json.project_id ] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        1104,
+        -208
+      ],
+      "id": "4fbf9fd2-9dde-4e39-8110-61af03b197c5",
+      "name": "Save Chat Answer",
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "2ZjsdLaIJUCvjvem",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "a0115946-0fb9-4223-bab0-7d40abb70d72",
+              "leftValue": "={{ $json.status || '' }}",
+              "rightValue": "answered",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        1328,
+        -208
+      ],
+      "id": "49fe63b5-07f6-409f-ba7b-6789ef20dbab",
+      "name": "Answer Saved?"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({\n  success: false,\n  error: \"ANSWER_NOT_SAVED\",\n  message: \"The question may have already been answered. Please refresh and try again.\"\n}) }}",
+        "options": {
+          "responseCode": 409
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1552,
+        -112
+      ],
+      "id": "bffa3f2f-399d-4ad7-9255-f3dc2ed73732",
+      "name": "Answer Save Conflict Response"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n    id,\n    project_id,\n    question,\n    category,\n    priority,\n    status\nFROM clarification_questions\nWHERE project_id = $1::uuid\n  AND status = 'pending'\nORDER BY\n    CASE priority\n        WHEN 'high' THEN 1\n        WHEN 'medium' THEN 2\n        WHEN 'low' THEN 3\n        ELSE 4\n    END,\n    id\nLIMIT 1;",
+        "options": {
+          "queryReplacement": "={{ [   $('Validate Chat Input').first().json.project_id ] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        1552,
+        -304
+      ],
+      "id": "308107c4-5ed5-4349-829e-ffc4a5a7778e",
+      "name": "Get Next Pending Question",
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "2ZjsdLaIJUCvjvem",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "f430797d-2150-41f5-9384-fa75ec902c7e",
+              "leftValue": "={{ $json.id || '' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        1776,
+        -304
+      ],
+      "id": "25a2754b-ff75-4f36-832d-b5fda0fde5a8",
+      "name": "More Questions?"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({\n  success: true,\n  interview_complete: false,\n  message: \"Answer saved successfully. Here is your next question.\",\n  next_question: {\n    id: $json.id,\n    question: $json.question,\n    category: $json.category,\n    priority: $json.priority\n  }\n}) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        2000,
+        -400
+      ],
+      "id": "5f896a19-f6cf-4964-80e8-e65811ef0d31",
+      "name": "Next Chat Question Response"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({\n  success: true,\n  interview_complete: true,\n  message: \"All clarification questions have been answered. Your requirements are ready for specification generation.\",\n  next_question: null\n}) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        2000,
+        -208
+      ],
+      "id": "85f72598-bbd8-46c2-8150-3c2eb73e4b24",
+      "name": "Interview Complete Response"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate Chat Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Chat Input": {
+      "main": [
+        [
+          {
+            "node": "Chat Input Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Chat Input Valid?": {
+      "main": [
+        [
+          {
+            "node": "Verify Clarification Question",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Invalid Chat Input Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Clarification Question": {
+      "main": [
+        [
+          {
+            "node": "Question Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Question Found?": {
+      "main": [
+        [
+          {
+            "node": "Save Chat Answer",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Question Not Found Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Chat Answer": {
+      "main": [
+        [
+          {
+            "node": "Answer Saved?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Answer Saved?": {
+      "main": [
+        [
+          {
+            "node": "Get Next Pending Question",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Answer Save Conflict Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Next Pending Question": {
+      "main": [
+        [
+          {
+            "node": "More Questions?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "More Questions?": {
+      "main": [
+        [
+          {
+            "node": "Next Chat Question Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Interview Complete Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "6050a226-1da6-456b-b2fd-01a2220fe554",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "02558d88dcee125b348c380448781b5f7fcca2bcea33065de0bb08cd749fdd0d"
+  },
+  "nodeGroups": [],
+  "id": "ciIcsehjBIHKyUPL",
+  "tags": []
+}

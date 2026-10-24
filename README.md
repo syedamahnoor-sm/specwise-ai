@@ -2,108 +2,52 @@
 
 **AI-Powered Software Requirements Engineering Platform**
 
-SpecWise is a web-based platform designed to simplify and improve the Software Requirements Engineering process through AI-assisted requirement gathering, analysis, refinement, and documentation.
+SpecWise helps turn initial software ideas into structured requirements through AI-generated clarification questions, a question-and-answer interview API, and planned specification generation and approval workflows.
 
-## Project Overview
+## Current implementation
 
-Traditional requirements engineering often involves unclear requirements, incomplete information, and time-consuming documentation. SpecWise aims to address these challenges through an interactive, AI-assisted workflow.
+| Workflow | Description | Status |
+|---|---|---|
+| 1 — Project Intake API | Authenticated project creation and validation | Implemented and locally tested |
+| 2 — AI Requirements Interviewer | Gemini-generated, categorized and prioritized clarification questions | Implemented and locally tested |
+| 3 — AI Chatbot Conversation | Accept answers, mark questions answered, return next question, detect interview completion | Implemented and locally tested |
+| 4 — Gemini Follow-up Questions & Conversation History | Analyze answers, ask contextual follow-ups, persist chat history | Planned |
+| 5 — Requirements Validation & SRS Generation | Extract and validate requirements, generate SRS | Planned |
+| 6 — Document Generation & Export | Produce downloadable deliverables | Planned |
+| 7 — Approval & Revision | Review, approve, revise and version specifications | Planned |
 
-The platform will allow users to describe their software ideas, refine requirements through AI-generated clarification questions, and produce structured Software Requirements Specification (SRS) documents.
+Workflow 3 is a sequential Q&A API; it is **not yet a free-form Gemini chatbot**. Dynamic follow-up generation and conversation history storage are planned separately.
 
-## Planned Features
+## Implemented API endpoints
 
-- Project creation and management
-- AI-assisted requirements elicitation
-- Interactive clarification questions
-- Functional and non-functional requirements identification
-- Requirements prioritization and refinement
-- SRS document generation
-- Specification version management
-- Requirements review and approval
+| Method | Production path | Function |
+|---|---|---|
+| POST | `/webhook/specwise/projects` | Create a project |
+| POST | `/webhook/specwise/projects/interview` | Generate or retrieve clarification questions |
+| POST | `/webhook/specwise/projects/chat` | Submit an answer and receive the next question or completion status |
 
-## Implemented Workflows
+All endpoints use n8n Header Auth (`x-api-key`) for trusted backend-to-backend requests. Do not embed this key in a browser application.
 
-### Workflow 1 — Project Intake API
-
-Provides an authenticated REST API for creating software projects.
-
-**Features:**
-- API key authentication
-- Input validation
-- PostgreSQL project storage
-- Structured success and error responses
-
-**Endpoint:** `POST /webhook/specwise/projects`
-
-**File:** `workflows/01-project-intake-api.json`
-
-### Workflow 2 — AI Requirements Interviewer
-
-Uses Google Gemini Flash-Lite to identify missing or ambiguous software requirements and generate clarification questions.
-
-**Features:**
-- Project UUID validation
-- PostgreSQL project lookup
-- AI-generated clarification questions
-- Question categorization and prioritization
-- JSON response validation
-- PostgreSQL question storage
-- Existing-question retrieval
-- Duplicate prevention for sequential requests
-- Gemini service failure handling
-
-**Endpoint:** `POST /webhook/specwise/projects/interview`
-
-**File:** `workflows/02-ai-requirements-interviewer.json`
-
-### Technology Stack
+## Technology stack
 
 | Component | Technology |
 |---|---|
-| Workflow automation | n8n |
+| Workflow/API automation | n8n |
 | Database | PostgreSQL 17 |
-| AI model | Google Gemini 3.5 Flash-Lite |
-| Containerization | Docker |
-| API | REST / JSON |
+| AI question generation | Google Gemini Flash-Lite (configured in n8n) |
+| Containers | Docker |
+| API transport | REST / JSON |
+| Planned frontend | React and TypeScript |
+| Version control | Git / GitHub |
 
-### Local Setup
-
-1. Start the PostgreSQL and n8n Docker containers.
-2. Initialize the database using `database/schema.sql`.
-3. Import the workflow JSON files into n8n.
-4. Configure PostgreSQL credentials.
-5. Configure Google Gemini API credentials.
-6. Configure webhook Header Auth credentials.
-7. Publish both workflows.
-8. Test the API endpoints using an HTTP client.
-
-**Security:** Never commit API keys, database passwords, or other credentials to the repository.
-
-### Current Development Status
-
-- Workflow 1: Completed and tested.
-- Workflow 2: Core functionality implemented and tested.
-- Next: User responses to clarification questions and iterative requirements gathering.
-
-See `docs/api-documentation.md` for endpoint details and response examples.
-
-## Technology Stack
-
-| Component | Technology |
-|---|---|
-| Frontend | React, TypeScript |
-| Backend Automation | n8n |
-| Database | PostgreSQL 17 |
-| AI Integration | LLM APIs (planned) |
-| Containerization | Docker |
-| Version Control | Git and GitHub |
-
-## Project Structure
+## Repository structure
 
 ```text
 specwise-ai/
 ├── workflows/
-│   └── 01-project-intake-api.json
+│   ├── 01-project-intake-api.json
+│   ├── 02-ai-requirements-interviewer.json
+│   └── 03-ai-chatbot-conversation.json
 ├── database/
 │   └── schema.sql
 ├── docs/
@@ -111,54 +55,35 @@ specwise-ai/
 └── README.md
 ```
 
-## Development Progress
+## Local setup
 
-### Workflow 1 — Project Intake API
+1. Start PostgreSQL and n8n in Docker.
+2. Initialize the `specwise` database with `database/schema.sql` (the SQL includes idempotent migrations for question metadata).
+3. Import all three workflow JSON files into n8n.
+4. Reconnect PostgreSQL, Gemini (Workflow 2), and Header Auth credentials.
+5. Publish/activate the workflows.
+6. Send JSON requests to the endpoints using an HTTP client. The test endpoints use `/webhook-test/` while n8n listens for a test event.
 
-**Status: Implemented and locally tested**
+See [`docs/api-documentation.md`](docs/api-documentation.md) for payloads, responses, and testing details.
 
-- Accepts project information through a REST webhook
-- Validates project titles and initial ideas
-- Uses header-based API-key authentication
-- Saves valid projects in PostgreSQL
-- Returns structured JSON responses
-- Handles validation errors and database failures
+## Verified development progress
 
-### Upcoming Development
+- **Workflow 1:** Project creation, validation, missing-key rejection, and database failure handling tested.
+- **Workflow 2:** Initial AI question generation, existing pending-question reuse, persistence, and AI failure handling tested.
+- **Workflow 3:** Answer persistence and status update, next-question retrieval, full five-question interview completion, invalid-answer rejection, nonexistent-question rejection, and duplicate-answer rejection tested.
+- **Not yet tested:** Workflow 3's simultaneous-update HTTP 409 conflict scenario.
 
-- AI requirements interviewer
-- Requirements extraction and classification
-- Clarification and refinement workflows
-- SRS generation and versioning
-- Review and approval functionality
-- Frontend integration and user authentication
+## Known limitations
 
-## API Endpoint
-
-`POST /webhook/specwise/projects`
-
-Request example:
-
-```json
-{
-  "title": "Smart Attendance System",
-  "initial_idea": "A university attendance management platform."
-}
-```
-
-Authentication requires an `x-api-key` header, configured securely in n8n.
-
-The API is currently tested in a local Docker environment. Public deployment and end-user authentication are not yet implemented.
-
-## Current Status
-
-SpecWise is under active development. The initial project intake workflow has been implemented and tested, while the remaining features are planned for subsequent development.
+- Workflow 3 does not currently write records to the `conversations` table or set `clarification_questions.answered_at`.
+- Follow-up questions are not dynamically generated by Gemini after each answer.
+- API-key authentication is not a substitute for user-level authentication and per-project authorization.
+- Rate limiting, production deployment, and frontend integration are pending.
+- Workflow 2's malformed-model-output handling and concurrent duplicate-generation safeguards need further hardening.
 
 ## Security
 
-API credentials and database passwords are not included in this repository. Imported n8n workflows require their own credentials to be configured.
-
-The API key is intended for trusted backend-to-backend communication and must not be embedded in public frontend code.
+Never commit API keys, Gemini credentials, database passwords, or `.env` files. Exported n8n workflows contain credential references and instance metadata; review and sanitize them before publishing. Rotate any credentials that were previously exposed.
 
 ## License
 

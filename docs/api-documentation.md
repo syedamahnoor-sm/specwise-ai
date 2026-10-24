@@ -1,36 +1,21 @@
 # SpecWise API Documentation
 
+## Common configuration
+
+- Base URL (local): `http://localhost:5678`
+- Content type: `application/json`
+- Authentication: `x-api-key: YOUR_API_KEY` (n8n Header Auth)
+- Published workflows: `/webhook/...`; n8n test listener: `/webhook-test/...`
+- Never expose the API key in a public frontend or commit it to Git.
+
 ## Workflow 1 — Project Intake API
 
-**Status:** Implemented and locally tested
+**Status:** Implemented and locally tested  
+**Endpoint:** `POST /webhook/specwise/projects`
 
-This API creates a new software project in the SpecWise PostgreSQL database.
+Creates a software project. Required fields: `title` (nonempty string, max 255 characters) and `initial_idea` (nonempty string, max 10,000 characters). Leading/trailing whitespace is trimmed.
 
-### Endpoint
-
-| Property | Value |
-|---|---|
-| Method | POST |
-| Production path | `/webhook/specwise/projects` |
-| Test path | `/webhook-test/specwise/projects` |
-| Content type | `application/json` |
-| Authentication | Header API Key |
-
-**Local test URL:**
-
-`http://localhost:5678/webhook-test/specwise/projects`
-
-The production webhook requires the n8n workflow to be activated or published.
-
-### Authentication
-
-All requests require an HTTP header:
-
-`x-api-key: YOUR_API_KEY`
-
-The actual key must be stored securely and must never be committed to GitHub or exposed in frontend JavaScript.
-
-### Request Body
+### Example request
 
 ```json
 {
@@ -39,14 +24,7 @@ The actual key must be stored securely and must never be committed to GitHub or 
 }
 ```
 
-| Field | Type | Required | Validation |
-|---|---|---|---|
-| `title` | String | Yes | Non-empty after trimming; maximum 255 characters |
-| `initial_idea` | String | Yes | Non-empty after trimming; maximum 10,000 characters |
-
-Leading and trailing whitespace is removed before saving.
-
-### Success Response — HTTP 201
+### Success — HTTP 201 (illustrative)
 
 ```json
 {
@@ -62,81 +40,24 @@ Leading and trailing whitespace is removed before saving.
 }
 ```
 
-The UUID and timestamp above are illustrative.
+### Error handling
 
-### Validation Error — HTTP 400
+| HTTP | Condition |
+|---|---|
+| 400 | Invalid or missing title/initial idea |
+| 403 | Missing/invalid API key (n8n authentication) |
+| 503 | Database unavailable |
 
-```json
-{
-  "success": false,
-  "message": "Invalid project information.",
-  "errors": [
-    "Project title is required and must be a string."
-  ]
-}
-```
-
-### Authentication Error — HTTP 403
-
-A request without the required API key is rejected by n8n before reaching the workflow's validation logic.
-
-### Database Error — HTTP 503
-
-```json
-{
-  "success": false,
-  "message": "Database service is temporarily unavailable. Please try again later."
-}
-```
-
-### Tested Scenarios
-
-| Test Case | Expected Status | Result |
-|---|---|---|
-| Valid authenticated project creation | 201 | Passed |
-| Empty or whitespace-only title | 400 | Passed |
-| Numeric title | 400 | Passed |
-| Title longer than 255 characters | 400 | Passed |
-| Missing initial idea | 400 | Passed |
-| Missing API key | 403 | Passed |
-| PostgreSQL service unavailable | 503 | Passed |
-
-### Database Operation
-
-The workflow uses a parameterized PostgreSQL query to insert a project into the `projects` table. Parameterization prevents request values from being directly concatenated into the SQL statement.
-
-### Current Limitations
-
-- Only project creation is implemented.
-- End-user authentication and project-level authorization are not yet implemented.
-- API-key authentication is intended for trusted backend-to-backend requests.
-- Rate limiting and duplicate-request protection are not yet implemented.
-- The API is currently deployed in a local Docker development environment.
-
-### Workflow Import
-
-Import `workflows/01-project-intake-api.json` into n8n and configure the Header Auth and PostgreSQL credentials for the target environment. Ensure the PostgreSQL schema has been initialized before testing.
+**Verified tests:** Valid creation (201); empty, non-string, and overlength title (400); missing initial idea (400); missing API key (403); database unavailable (503). SQL insertion is parameterized.
 
 ## Workflow 2 — AI Requirements Interviewer
 
-### Endpoint
+**Status:** Implemented and locally tested  
+**Endpoint:** `POST /webhook/specwise/projects/interview`
 
-`POST /webhook/specwise/projects/interview`
+Validates an existing project, retrieves its pending clarification questions if present, or asks Gemini Flash-Lite to generate and persist 5–7 questions. Each question includes a category, priority, and initial `pending` status.
 
-Generates clarification questions for an existing software project using Google Gemini Flash-Lite. Questions are validated and stored in PostgreSQL.
-
-If pending questions already exist, the API retrieves them without calling Gemini again.
-
-### Authentication
-
-Header-based API key authentication is required.
-
-| Header | Value |
-|---|---|
-| `x-api-key` | Configured API key |
-| `Content-Type` | `application/json` |
-
-### Request Body
+### Example request
 
 ```json
 {
@@ -144,11 +65,7 @@ Header-based API key authentication is required.
 }
 ```
 
-**Validation:** `project_id` must be a valid UUID referencing an existing project.
-
-### Success Response — 201 Created
-
-Returned when the AI generates and saves new clarification questions.
+### New questions — HTTP 201 (abbreviated example)
 
 ```json
 {
@@ -168,34 +85,22 @@ Returned when the AI generates and saves new clarification questions.
 }
 ```
 
-The example shows one question for brevity. A successful new interview normally generates 5–7 questions.
+The example contains one question for readability; actual new interviews normally produce 5–7.
 
-### Existing Questions Response — 200 OK
+### Existing pending questions — HTTP 200
 
-Returned when the project already has pending clarification questions.
+Returns `success: true`, `question_count`, and the existing saved question objects without another Gemini call.
 
-```json
-{
-  "success": true,
-  "message": "Existing clarification questions retrieved successfully.",
-  "project_id": "0fe31450-7fc1-4070-a136-d38180b1a205",
-  "question_count": 5,
-  "questions": []
-}
-```
+### Error handling
 
-The `questions` array above is abbreviated; the actual response contains the saved question objects.
-
-### Error Responses
-
-| HTTP status | Meaning |
+| HTTP | Condition |
 |---|---|
-| `400` | Invalid or missing project ID |
-| `403` | Missing or invalid API key |
-| `404` | Project not found |
-| `503` | Database operation or Gemini service unavailable |
+| 400 | Invalid/missing project UUID |
+| 403 | Missing/invalid API key |
+| 404 | Project not found |
+| 503 | Gemini service or database unavailable |
 
-Example Gemini failure response:
+Gemini failure example:
 
 ```json
 {
@@ -206,28 +111,133 @@ Example Gemini failure response:
 }
 ```
 
-### Question Metadata
-
-**Categories:** `functional`, `non_functional`, `security`, `usability`, `performance`, `stakeholder`, `constraint`.
-
+**Question categories:** `functional`, `non_functional`, `security`, `usability`, `performance`, `stakeholder`, `constraint`.  
 **Priorities:** `high`, `medium`, `low`.
 
-**Initial status:** `pending`.
+**Verified tests:** New-question generation and storage (201), pending-question reuse (200), Gemini failure handling (503). Duplicate avoidance covers sequential requests, not simultaneous requests. Malformed Gemini JSON has no dedicated error response.
 
-### Workflow Processing
+## Workflow 3 — AI Chatbot Conversation
 
-1. Authenticate the request and validate the project ID.
-2. Retrieve the project from PostgreSQL.
-3. Check whether pending clarification questions already exist.
-4. Return existing questions if found.
-5. Otherwise, ask Gemini Flash-Lite to generate 5–7 questions.
-6. Validate the AI-generated JSON structure.
-7. Save valid questions to PostgreSQL.
-8. Return the generated questions or a structured error response.
+**Status:** Implemented and locally tested  
+**Endpoint:** `POST /webhook/specwise/projects/chat`
 
-### Implementation Notes
+Accepts an answer for a pending clarification question belonging to the specified project. Marks the question as `answered`, then returns the next pending question ordered by priority (`high`, `medium`, `low`) and ID. When no pending questions remain, returns `interview_complete: true`.
 
-- The workflow uses parameterized SQL queries.
-- Gemini credentials and PostgreSQL credentials are configured in n8n.
-- Duplicate prevention has been verified for sequential requests; concurrent requests require additional safeguards.
-- Malformed AI output handling is not yet mapped to a dedicated API error response.
+### Example request
+
+```json
+{
+  "project_id": "0fe31450-7fc1-4070-a136-d38180b1a205",
+  "question_id": "cdb3391e-80f6-4325-a9d1-2cb5f7d4ad83",
+  "answer": "Students, teachers, and administrators will use the system."
+}
+```
+
+| Field | Type | Validation |
+|---|---|---|
+| `project_id` | String | Required UUID |
+| `question_id` | String | Required UUID |
+| `answer` | String | Required, nonempty after trimming |
+
+### Answer saved; next question available — HTTP 200
+
+```json
+{
+  "success": true,
+  "interview_complete": false,
+  "message": "Answer saved successfully. Here is your next question.",
+  "next_question": {
+    "id": "11111111-1111-4111-8111-111111111111",
+    "question": "What authentication methods are required?",
+    "category": "security",
+    "priority": "high"
+  }
+}
+```
+
+The `next_question` example is illustrative.
+
+### Final answer; interview complete — HTTP 200
+
+```json
+{
+  "success": true,
+  "interview_complete": true,
+  "message": "All clarification questions have been answered. Your requirements are ready for specification generation.",
+  "next_question": null
+}
+```
+
+### Invalid input — HTTP 400
+
+```json
+{
+  "success": false,
+  "message": "Invalid chat input.",
+  "errors": ["Answer cannot be empty."]
+}
+```
+
+### Missing or previously answered question — HTTP 404
+
+```json
+{
+  "success": false,
+  "error": "QUESTION_NOT_FOUND",
+  "message": "The clarification question was not found or has already been answered."
+}
+```
+
+### Concurrent update conflict — HTTP 409
+
+```json
+{
+  "success": false,
+  "error": "ANSWER_NOT_SAVED",
+  "message": "The question may have already been answered. Please refresh and try again."
+}
+```
+
+The `409` response is configured but **has not been exercised in a concurrent-request test**. A request for an already-answered question normally returns `404` at the initial verification step.
+
+### Authentication failure — HTTP 403
+
+n8n rejects requests without the correct Header Auth key before workflow execution.
+
+### PostgreSQL operations
+
+1. Select the question by `id`, `project_id`, and `status = 'pending'`.
+2. Update `answer` and `status = 'answered'` only if the row is still pending, using parameterized SQL.
+3. Select the next pending question by project and priority.
+
+**Note:** The current workflow does **not** populate `answered_at` or insert into `conversations`. Both are future enhancements.
+
+### Tests performed
+
+| Scenario | Expected HTTP | Observed result |
+|---|---|---|
+| Submit valid answer | 200 | Passed |
+| Save answer in PostgreSQL | — | Verified `answered` status |
+| Return next pending question | 200 | Passed |
+| Process remaining four questions | 200 | Passed |
+| Last question returns `interview_complete: true` | 200 | Passed |
+| All five question records marked `answered` | — | Verified in PostgreSQL |
+| Empty answer | 400 | Reported passed |
+| Nonexistent question | 404 | Passed |
+| Already-answered question | 404 | Passed |
+| Simultaneous-update conflict | 409 | Not tested |
+
+### Known limitations
+
+- No Gemini-generated contextual follow-up questions yet; planned for Workflow 4.
+- No persisted chat transcript in `conversations` yet.
+- No per-user authorization or production rate limiting.
+- No dedicated database failure response branch in Workflow 3; a database error may result in n8n's default error handling.
+
+## Importing workflows
+
+1. Run `database/schema.sql` against PostgreSQL.
+2. Import `workflows/01-project-intake-api.json`, `02-ai-requirements-interviewer.json`, and `03-ai-chatbot-conversation.json` into n8n.
+3. Configure the required Header Auth and PostgreSQL credentials, plus Gemini credentials for Workflow 2.
+4. Publish/activate the workflows and use the production webhook paths.
+5. Review workflow exports for metadata and secrets before committing.
