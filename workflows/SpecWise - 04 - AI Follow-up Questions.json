@@ -1,0 +1,883 @@
+{
+  "name": "SpecWise - 04 - AI Follow-up Questions",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "specwise/projects/followup",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.2,
+      "position": [
+        -544,
+        0
+      ],
+      "id": "813d6670-1d8e-4e74-8b86-e06c28797b69",
+      "name": "Webhook",
+      "webhookId": "ac443f2b-a16c-402a-9e33-a8d33c0686c3",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "o0S8KYoNjcWSOHg2",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || {};\n\nconst projectId = body.project_id;\nconst questionId = body.question_id;\n\nconst uuidRegex =\n  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;\n\nconst errors = [];\n\nif (typeof projectId !== 'string' || !uuidRegex.test(projectId)) {\n  errors.push('Valid project_id is required.');\n}\n\nif (typeof questionId !== 'string' || !uuidRegex.test(questionId)) {\n  errors.push('Valid question_id is required.');\n}\n\nreturn [{\n  json: {\n    valid: errors.length === 0,\n    errors,\n    project_id: projectId,\n    question_id: questionId\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -272,
+        0
+      ],
+      "id": "0fade9ba-46e8-4763-8cae-53d42756f1af",
+      "name": "Validate Follow-up Input"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "e0e9bd1c-27a4-41e9-a5d0-0732fc45441a",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        -16,
+        0
+      ],
+      "id": "2da41013-f656-4d66-bdec-12d24e98fb6a",
+      "name": "Follow-up Input Valid?"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({\n  success: false,\n  message: \"Invalid follow-up input.\",\n  errors: $json.errors\n}) }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        208,
+        112
+      ],
+      "id": "c34a5991-cc40-4f29-96d8-445c5c0314d2",
+      "name": "Invalid Follow-up Input Response"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n    cq.id,\n    cq.project_id,\n    cq.question,\n    cq.answer,\n    cq.category,\n    cq.priority,\n    cq.status,\n    p.title AS project_title,\n    p.initial_idea\nFROM clarification_questions cq\nJOIN projects p ON p.id = cq.project_id\nWHERE cq.id = $1::uuid\n  AND cq.project_id = $2::uuid\n  AND cq.status = 'answered'\n  AND cq.answer IS NOT NULL;",
+        "options": {
+          "queryReplacement": "={{ [   $json.question_id,   $json.project_id ] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        208,
+        -96
+      ],
+      "id": "91d0946b-9ea3-461e-bdca-d9076d637a07",
+      "name": "Get Answered Question",
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "2ZjsdLaIJUCvjvem",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "ca09781e-8630-4b7d-a0df-5d589956fd90",
+              "leftValue": "={{ $json.id || '' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        432,
+        -96
+      ],
+      "id": "cea2e92c-296c-4cf0-bcdd-f9f2f0fafb25",
+      "name": "Answered Question Found?"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({\n  success: false,\n  error: \"ANSWERED_QUESTION_NOT_FOUND\",\n  message: \"The answered clarification question was not found for this project.\"\n}) }}",
+        "options": {
+          "responseCode": 404
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        640,
+        48
+      ],
+      "id": "aa25d78d-e57c-4728-bf1f-39b08c817551",
+      "name": "Answered Question Not Found Response"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-3.5-flash-lite",
+          "mode": "list",
+          "cachedResultName": "Gemini 3.5 Flash Lite"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "={{ `You are an expert Software Requirements Engineer working on SpecWise.\n\nYour task is to evaluate a stakeholder's answer to a software requirements clarification question.\n\nPROJECT TITLE:\n${$('Get Answered Question').first().json.project_title}\n\nPROJECT IDEA:\n${$('Get Answered Question').first().json.initial_idea}\n\nORIGINAL QUESTION:\n${$('Get Answered Question').first().json.question}\n\nSTAKEHOLDER ANSWER:\n${$('Get Answered Question').first().json.answer}\n\nQUESTION CATEGORY:\n${$('Get Answered Question').first().json.category}\n\nINSTRUCTIONS:\n1. Determine whether the stakeholder's answer directly addresses the original question.\n2. Identify whether the answer is clear, specific, complete, and testable.\n3. If the answer is irrelevant, explain what information is missing and generate exactly ONE targeted follow-up question.\n4. If the answer is vague or incomplete, ask ONE question addressing the most important missing detail.\n5. If the answer sufficiently addresses the requirement, do not generate a follow-up.\n6. Never claim the answer is missing if a nonempty answer was provided.\n7. Never invent stakeholder requirements or assumptions.\n8. Avoid generic follow-up questions such as \"Could you provide more details?\"\n9. Keep follow-up questions specific to the original requirement.\n10. Return ONLY valid JSON without markdown.\n\nREQUIRED JSON FORMAT:\n{\n  \"needs_followup\": true,\n  \"reason\": \"The stakeholder described user roles but did not identify any applicable data privacy regulations or security policies.\",\n  \"followup_question\": \"Are there specific student data privacy regulations or institutional security policies the system must comply with?\",\n  \"category\": \"security\",\n  \"priority\": \"high\"\n}\n\nIf no follow-up is required, return:\n{\n  \"needs_followup\": false,\n  \"reason\": \"The stakeholder's answer sufficiently addresses the original requirement.\",\n  \"followup_question\": null,\n  \"category\": \"security\",\n  \"priority\": \"high\"\n}\n\nAllowed categories: functional, non_functional, security, usability, performance, stakeholder, constraint.\nAllowed priorities: high, medium, low.\nUse the original question category unless there is a strong reason to change it.\n` }} "
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "builtInTools": {},
+        "options": {
+          "temperature": 0.2
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        1104,
+        -256
+      ],
+      "id": "6f8bb83e-c270-4996-9a1a-a749dfe87497",
+      "name": "Analyze Answer with Gemini",
+      "retryOnFail": true,
+      "credentials": {
+        "googlePalmApi": {
+          "id": "T8QI3sRRTLNeKlnF",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const output = $input.first().json;\n\n// Extract Gemini's response text.\nconst raw =\n  output.content?.parts?.[0]?.text ??\n  output.candidates?.[0]?.content?.parts?.[0]?.text ??\n  output.text ??\n  output.output ??\n  null;\n\nlet result;\n\ntry {\n  if (raw && typeof raw === 'object') {\n    result = raw;\n  } else if (typeof raw === 'string') {\n    const cleaned = raw\n      .replace(/^```(?:json)?\\s*/i, '')\n      .replace(/\\s*```$/, '')\n      .trim();\n\n    result = JSON.parse(cleaned);\n  } else {\n    throw new Error('Gemini response text not found.');\n  }\n\n  if (\n    typeof result.needs_followup !== 'boolean' ||\n    typeof result.reason !== 'string' ||\n    !result.reason.trim()\n  ) {\n    throw new Error('Invalid Gemini response structure.');\n  }\n\n  const categories = [\n    'functional', 'non_functional', 'security',\n    'usability', 'performance', 'stakeholder', 'constraint'\n  ];\n\n  const priorities = ['high', 'medium', 'low'];\n\n  if (\n    !categories.includes(result.category) ||\n    !priorities.includes(result.priority)\n  ) {\n    throw new Error('Invalid category or priority.');\n  }\n\n  if (\n    result.needs_followup &&\n    (typeof result.followup_question !== 'string' ||\n     !result.followup_question.trim())\n  ) {\n    throw new Error('Missing follow-up question.');\n  }\n\n  return [{\n    json: {\n      valid: true,\n      needs_followup: result.needs_followup,\n      reason: result.reason.trim(),\n      followup_question: result.needs_followup\n        ? result.followup_question.trim()\n        : null,\n      category: result.category,\n      priority: result.priority,\n      project_id: $('Get Answered Question').first().json.project_id,\n      original_question_id: $('Get Answered Question').first().json.id,\n      original_question: $('Get Answered Question').first().json.question,\n      original_answer: $('Get Answered Question').first().json.answer\n    }\n  }];\n\n} catch (error) {\n  return [{\n    json: {\n      valid: false,\n      error: 'INVALID_AI_RESPONSE',\n      message: String(error?.message ?? error)\n    }\n  }];\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1504,
+        -256
+      ],
+      "id": "c3400965-f95e-4783-a456-fed694c70aa1",
+      "name": "Validate Gemini Follow-up"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "30a7dde2-9efc-409e-82e3-01a623076256",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        1792,
+        -256
+      ],
+      "id": "b02222c5-efb7-433b-ae47-95d7f07618b9",
+      "name": "Gemini Response Valid?"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({\n  success: false,\n  error: \"INVALID_AI_RESPONSE\",\n  message: \"Gemini returned an invalid response. Please try again.\"\n}) }}",
+        "options": {
+          "responseCode": 502
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        2320,
+        -64
+      ],
+      "id": "0fe012b7-8664-4d6f-83ef-ef5f306df785",
+      "name": "Invalid Gemini Response"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "e54a6332-045e-4f80-ae3e-d9ec89fbf503",
+              "leftValue": "={{ $json.needs_followup }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        1984,
+        -400
+      ],
+      "id": "049641a1-fb87-425d-8498-d0e4dd2d6a6c",
+      "name": "Follow-up Needed?"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH claim AS (\n    SELECT id\n    FROM followup_processing\n    WHERE question_id = $8::uuid\n      AND project_id = $1::uuid\n      AND status = 'processing'\n    FOR UPDATE\n),\nnew_question AS (\n    INSERT INTO clarification_questions (\n        project_id, question, category, priority, status\n    )\n    SELECT $1::uuid, $2, $3, $4, 'pending'\n    FROM claim\n    RETURNING id, project_id, question, category, priority, status\n),\nhistory AS (\n    INSERT INTO conversations (project_id, role, content)\n    SELECT $1::uuid, v.role, v.content\n    FROM claim\n    CROSS JOIN (\n        VALUES ('assistant', $5::text), ('user', $6::text)\n    ) AS v(role, content)\n    RETURNING id\n),\ncompleted AS (\n    UPDATE followup_processing\n    SET\n        status = 'completed',\n        needs_followup = TRUE,\n        followup_question_id = (SELECT id FROM new_question),\n        reason = $7,\n        completed_at = NOW()\n    WHERE id IN (SELECT id FROM claim)\n      AND (SELECT COUNT(*) FROM history) = 2\n    RETURNING id\n)\nSELECT nq.*\nFROM new_question nq\nJOIN completed c ON TRUE;",
+        "options": {
+          "queryReplacement": "={{ [\n  $('Validate Gemini Follow-up').first().json.project_id,\n  $('Validate Gemini Follow-up').first().json.followup_question,\n  $('Validate Gemini Follow-up').first().json.category,\n  $('Validate Gemini Follow-up').first().json.priority,\n  $('Validate Gemini Follow-up').first().json.original_question,\n  $('Validate Gemini Follow-up').first().json.original_answer,\n  $('Validate Gemini Follow-up').first().json.reason,\n  $('Validate Gemini Follow-up').first().json.original_question_id\n] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        2192,
+        -512
+      ],
+      "id": "8fa188fd-468c-4b95-bc42-a4cb73c27d01",
+      "name": "Save AI Follow-up Question",
+      "credentials": {
+        "postgres": {
+          "id": "2ZjsdLaIJUCvjvem",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH claim AS (\n    SELECT id\n    FROM followup_processing\n    WHERE question_id = $4::uuid\n      AND project_id = $1::uuid\n      AND status = 'processing'\n    FOR UPDATE\n),\nhistory AS (\n    INSERT INTO conversations (project_id, role, content)\n    SELECT $1::uuid, v.role, v.content\n    FROM claim\n    CROSS JOIN (\n        VALUES ('assistant', $2::text), ('user', $3::text)\n    ) AS v(role, content)\n    RETURNING id\n),\ncompleted AS (\n    UPDATE followup_processing\n    SET\n        status = 'completed',\n        needs_followup = FALSE,\n        followup_question_id = NULL,\n        reason = $5,\n        completed_at = NOW()\n    WHERE id IN (SELECT id FROM claim)\n      AND (SELECT COUNT(*) FROM history) = 2\n    RETURNING id, status, needs_followup, reason\n)\nSELECT * FROM completed;",
+        "options": {
+          "queryReplacement": "={{ [\n  $('Validate Gemini Follow-up').first().json.project_id,\n  $('Validate Gemini Follow-up').first().json.original_question,\n  $('Validate Gemini Follow-up').first().json.original_answer,\n  $('Validate Gemini Follow-up').first().json.original_question_id,\n  $('Validate Gemini Follow-up').first().json.reason\n] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        2192,
+        -288
+      ],
+      "id": "964687bd-55ca-41da-9983-80ab23302768",
+      "name": "Save Conversation - No Follow-up",
+      "credentials": {
+        "postgres": {
+          "id": "2ZjsdLaIJUCvjvem",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{\n  {\n    success: true,\n    message: \"Follow-up question generated successfully\",\n    project_id: $('Save AI Follow-up Question').first().json.project_id,\n    needs_followup: true,\n    followup_question: {\n      id: $('Save AI Follow-up Question').first().json.id,\n      question: $('Save AI Follow-up Question').first().json.question,\n      category: $('Save AI Follow-up Question').first().json.category,\n      priority: $('Save AI Follow-up Question').first().json.priority\n    }\n  }\n}}",
+        "options": {
+          "responseCode": 201
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        2496,
+        -512
+      ],
+      "id": "4d338fb3-275f-41d2-a45b-ca13b6cbff1d",
+      "name": "Follow-up Generated Response"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{\n  {\n    success: true,\n    message: \"No additional clarification required\",\n    project_id: $('Validate Gemini Follow-up').first().json.project_id,\n    needs_followup: false,\n    reason: $('Save Conversation - No Follow-up').first().json.reason\n  }\n}}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        2496,
+        -288
+      ],
+      "id": "0b01fa3e-778f-428c-9a92-e06a8df9191e",
+      "name": "No Follow-up Needed Response"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO followup_processing (\n    project_id,\n    question_id,\n    status\n)\nVALUES (\n    $1::uuid,\n    $2::uuid,\n    'processing'\n)\nON CONFLICT (question_id)\nDO UPDATE SET\n    status = 'processing',\n    needs_followup = NULL,\n    followup_question_id = NULL,\n    reason = NULL,\n    created_at = NOW(),\n    completed_at = NULL\nWHERE followup_processing.status = 'failed'\nRETURNING id, project_id, question_id, status;",
+        "options": {
+          "queryReplacement": "={{ [   $json.project_id,   $json.id ] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        640,
+        -176
+      ],
+      "id": "452d9959-2dcd-4451-8c88-9cbe50927ada",
+      "name": "Claim Follow-up Processing",
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "2ZjsdLaIJUCvjvem",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "faf6394b-eb42-477b-940c-d959dcf85f18",
+              "leftValue": "={{ $json.id || '' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        864,
+        -176
+      ],
+      "id": "20233766-1af0-4b69-b5c1-fee3d96da42b",
+      "name": "Processing Claim Acquired?"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n    status,\n    needs_followup,\n    followup_question_id,\n    reason,\n    created_at,\n    completed_at\nFROM followup_processing\nWHERE question_id = $1::uuid\n  AND project_id = $2::uuid;",
+        "options": {
+          "queryReplacement": "={{ [   $('Validate Follow-up Input').first().json.question_id,   $('Validate Follow-up Input').first().json.project_id ] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        1088,
+        176
+      ],
+      "id": "d552efa5-682a-459b-952e-beba44a76be3",
+      "name": "Check Existing Follow-up Processing",
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "2ZjsdLaIJUCvjvem",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "d6618160-9202-40de-82b3-c04f017c5568",
+              "leftValue": "={{ $json.status || '' }}",
+              "rightValue": "completed",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        1376,
+        176
+      ],
+      "id": "70ab238b-3696-49d6-ac34-7c151470a160",
+      "name": "Follow-up Already Completed?"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n    fp.project_id,\n    fp.question_id AS original_question_id,\n    fp.needs_followup,\n    fp.reason,\n    cq.id AS followup_question_id,\n    cq.question AS followup_question,\n    cq.category,\n    cq.priority,\n    cq.status AS question_status\nFROM followup_processing fp\nLEFT JOIN clarification_questions cq\n    ON cq.id = fp.followup_question_id\nWHERE fp.question_id = $1::uuid\n  AND fp.project_id = $2::uuid\n  AND fp.status = 'completed';",
+        "options": {
+          "queryReplacement": "={{ [   $('Validate Follow-up Input').first().json.question_id,   $('Validate Follow-up Input').first().json.project_id ] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        1600,
+        80
+      ],
+      "id": "f70dcb78-acf4-4f5b-820e-1a3d3c79dcb8",
+      "name": "Get Completed Follow-up Result",
+      "credentials": {
+        "postgres": {
+          "id": "2ZjsdLaIJUCvjvem",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({\n  success: true,\n  already_processed: true,\n  needs_followup: $json.needs_followup,\n  message: \"Existing follow-up result retrieved successfully.\",\n  project_id: $json.project_id,\n  original_question_id: $json.original_question_id,\n  reason: $json.reason,\n  followup_question: $json.needs_followup ? {\n    id: $json.followup_question_id,\n    question: $json.followup_question,\n    category: $json.category,\n    priority: $json.priority,\n    status: $json.question_status\n  } : null\n}) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1824,
+        80
+      ],
+      "id": "214fa6fe-1196-4c0f-bb4e-a157b17927bb",
+      "name": "Existing Follow-up Result Response"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({\n  success: false,\n  error: \"FOLLOWUP_PROCESSING\",\n  message: \"This question is already being processed. Please try again shortly.\",\n  project_id: $('Validate Follow-up Input').first().json.project_id,\n  original_question_id: $('Validate Follow-up Input').first().json.question_id\n}) }}",
+        "options": {
+          "responseCode": 409
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1584,
+        304
+      ],
+      "id": "c0ffbd57-cb6b-463f-87a8-889bf05393e6",
+      "name": "Follow-up Processing Response"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE followup_processing\nSET\n    status = 'failed',\n    reason = $1,\n    completed_at = NOW()\nWHERE question_id = $2::uuid\n  AND project_id = $3::uuid\n  AND status = 'processing'\nRETURNING id, status;",
+        "options": {
+          "queryReplacement": "={{ [   $('Validate Gemini Follow-up').first().json.message || 'Invalid Gemini response',   $('Validate Follow-up Input').first().json.question_id,   $('Validate Follow-up Input').first().json.project_id ] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        2016,
+        -64
+      ],
+      "id": "884b10fc-0887-4019-b1f1-7b00a71472c7",
+      "name": "Mark Invalid AI Processing Failed",
+      "credentials": {
+        "postgres": {
+          "id": "2ZjsdLaIJUCvjvem",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE followup_processing\nSET\n    status = 'failed',\n    reason = 'Gemini service execution failed',\n    completed_at = NOW()\nWHERE question_id = $1::uuid\n  AND project_id = $2::uuid\n  AND status = 'processing'\nRETURNING id, status;",
+        "options": {
+          "queryReplacement": "={{ [   $('Validate Follow-up Input').first().json.question_id,   $('Validate Follow-up Input').first().json.project_id ] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.7,
+      "position": [
+        1216,
+        -16
+      ],
+      "id": "e3d020e4-1248-4e92-bdee-58ff5a9bd60f",
+      "name": "Mark Gemini Execution Failed",
+      "credentials": {
+        "postgres": {
+          "id": "2ZjsdLaIJUCvjvem",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({\n  success: false,\n  error: \"AI_SERVICE_UNAVAILABLE\",\n  message: \"Gemini is temporarily unavailable. Please try again later.\"\n}) }}",
+        "options": {
+          "responseCode": 503
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1440,
+        -16
+      ],
+      "id": "9cc6d49e-9d4b-489d-9349-f1de09dbae2b",
+      "name": "Gemini Service Unavailable Response"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate Follow-up Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Follow-up Input": {
+      "main": [
+        [
+          {
+            "node": "Follow-up Input Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Follow-up Input Valid?": {
+      "main": [
+        [
+          {
+            "node": "Get Answered Question",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Invalid Follow-up Input Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Answered Question": {
+      "main": [
+        [
+          {
+            "node": "Answered Question Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Answered Question Found?": {
+      "main": [
+        [
+          {
+            "node": "Claim Follow-up Processing",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Answered Question Not Found Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Answer with Gemini": {
+      "main": [
+        [
+          {
+            "node": "Validate Gemini Follow-up",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark Gemini Execution Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Gemini Follow-up": {
+      "main": [
+        [
+          {
+            "node": "Gemini Response Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini Response Valid?": {
+      "main": [
+        [
+          {
+            "node": "Follow-up Needed?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark Invalid AI Processing Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Follow-up Needed?": {
+      "main": [
+        [
+          {
+            "node": "Save AI Follow-up Question",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save Conversation - No Follow-up",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save AI Follow-up Question": {
+      "main": [
+        [
+          {
+            "node": "Follow-up Generated Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Conversation - No Follow-up": {
+      "main": [
+        [
+          {
+            "node": "No Follow-up Needed Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claim Follow-up Processing": {
+      "main": [
+        [
+          {
+            "node": "Processing Claim Acquired?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Processing Claim Acquired?": {
+      "main": [
+        [
+          {
+            "node": "Analyze Answer with Gemini",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Check Existing Follow-up Processing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Existing Follow-up Processing": {
+      "main": [
+        [
+          {
+            "node": "Follow-up Already Completed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Follow-up Already Completed?": {
+      "main": [
+        [
+          {
+            "node": "Get Completed Follow-up Result",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Follow-up Processing Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Completed Follow-up Result": {
+      "main": [
+        [
+          {
+            "node": "Existing Follow-up Result Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Invalid AI Processing Failed": {
+      "main": [
+        [
+          {
+            "node": "Invalid Gemini Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Gemini Execution Failed": {
+      "main": [
+        [
+          {
+            "node": "Gemini Service Unavailable Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "61781265-3f54-408b-8c46-5e08c7c0431f",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "02558d88dcee125b348c380448781b5f7fcca2bcea33065de0bb08cd749fdd0d"
+  },
+  "nodeGroups": [],
+  "id": "ljkewr1OPc9ozUqp",
+  "tags": []
+}

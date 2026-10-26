@@ -79,3 +79,17 @@ ALTER TABLE clarification_questions ADD COLUMN IF NOT EXISTS answered_at TIMESTA
 
 -- Workflow 3 currently sets answer and status='answered'.
 -- answered_at remains NULL until the workflow UPDATE is extended to set it.
+
+-- 7. Follow-up processing / idempotency for Workflow 4
+CREATE TABLE IF NOT EXISTS followup_processing (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    project_id UUID NOT NULL REFERENCES projects(id),
+    question_id UUID NOT NULL REFERENCES clarification_questions(id),
+    status VARCHAR(20) NOT NULL DEFAULT 'processing',
+    needs_followup BOOLEAN,
+    followup_question_id UUID REFERENCES clarification_questions(id),
+    reason TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    completed_at TIMESTAMPTZ,
+    UNIQUE (question_id)
+);

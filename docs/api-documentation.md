@@ -241,3 +241,95 @@ n8n rejects requests without the correct Header Auth key before workflow executi
 3. Configure the required Header Auth and PostgreSQL credentials, plus Gemini credentials for Workflow 2.
 4. Publish/activate the workflows and use the production webhook paths.
 5. Review workflow exports for metadata and secrets before committing.
+
+---
+
+## Workflow 4 — Gemini Follow-up Questions & Conversation History
+
+**Status:** Implemented; follow-up creation and duplicate-result retrieval tested. No-follow-up and failure paths await end-to-end testing.  
+**Endpoint:** `POST /webhook/specwise/projects/followup`
+
+Analyzes a previously answered clarification question using Google Gemini. Creates one pending follow-up question when clarification is necessary; records the original question/answer in conversation history; tracks processing in `followup_processing`. Repeated requests for a completed question return the saved result.
+
+### Request
+
+```json
+{
+  "project_id": "0fe31450-7fc1-4070-a136-d38180b1a205",
+  "question_id": "cdb3391e-80f6-4325-a9d1-2cb5f7d4ad83"
+}
+```
+
+Both IDs must be valid UUIDs. The question must belong to the project, have status `answered`, and have a non-null answer.
+
+### HTTP 201 — New follow-up created (observed response)
+
+```json
+{
+  "success": true,
+  "message": "Follow-up question generated successfully",
+  "project_id": "0fe31450-7fc1-4070-a136-d38180b1a205",
+  "needs_followup": true,
+  "followup_question": {
+    "id": "1f755785-b5ac-42d5-8c0e-82f34ca3f0f1",
+    "question": "Could you please provide the specific details regarding the requirement?",
+    "category": "functional",
+    "priority": "high"
+  }
+}
+```
+
+This first observed question was too generic because the initial Gemini prompt incorrectly referenced `$json.answer` after the processing-claim node. The prompt was subsequently corrected to reference `$('Get Answered Question').first().json.answer` and other source fields.
+
+### HTTP 200 — Previously completed result (observed behavior)
+
+```json
+{
+  "success": true,
+  "already_processed": true,
+  "needs_followup": true,
+  "message": "Existing follow-up result retrieved successfully.",
+  "project_id": "0fe31450-7fc1-4070-a136-d38180b1a205",
+  "original_question_id": "cdb3391e-80f6-4325-a9d1-2cb5f7d4ad83",
+  "reason": "The stakeholder's answer is undefined or missing, making it impossible to evaluate.",
+  "followup_question": {
+    "id": "1f755785-b5ac-42d5-8c0e-82f34ca3f0f1",
+    "question": "Could you please provide the specific details regarding the requirement?",
+    "category": "functional",
+    "priority": "high",
+    "status": "pending"
+  }
+}
+```
+
+The stored reason above comes from the **earlier, incorrect prompt** and is retained for auditability. Existing completed results are not regenerated automatically after prompt updates.
+
+### HTTP 200 — No follow-up needed (configured, not yet tested)
+
+```json
+{
+  "success": true,
+  "message": "No additional clarification required",
+  "project_id": "PROJECT_UUID",
+  "needs_followup": false,
+  "reason": "The answer sufficiently addresses the original requirement."
+}
+```
+
+### Error and processing responses
+
+| HTTP | Scenario | Verification |
+|---|---|---|
+| 400 | Invalid or missing UUID | Configured, not end-to-end tested |
+| 404 | Question missing, belongs to another project, or not answered | Configured, not end-to-end tested |
+| 409 | Follow-up processing already in progress | Configured, not end-to-end tested |
+| 502 | Gemini returns invalid structured data | Configured, not end-to-end tested |
+| 503 | Gemini execution fails | Configured, not end-to-end tested |
+
+### Database behavior and caveats
+
+- A unique constraint on `followup_processing.question_id` prevents multiple completed processing records for one original question.
+- A single PostgreSQL statement in each decision branch writes conversation history and updates processing status; the follow-up-required branch also inserts the new question.
+- A failed or interrupted execution can leave `status = 'processing'`; stale-processing recovery is not implemented.
+- n8n credential references in workflow exports must be checked before committing.
+- Only the positive path and duplicate retrieval have been demonstrated.
